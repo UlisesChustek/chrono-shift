@@ -5,113 +5,94 @@ import pytz
 from dateutil import parser
 from datetime import datetime
 
-# --- CACHED FUNCTION (API Logic) ---
+# --- CONFIG ---
+st.set_page_config(page_title="ChronoShift", page_icon="⏳", layout="centered")
+
+# --- LOGIC: GEO & STATE MANAGER ---
 @st.cache_data(show_spinner=False)
-def get_location_data(query):
-    """
-    Searches for a location and returns the Timezone and Full Address.
-    Cached to prevent API rate limiting.
-    """
+def get_timezone_from_string(query):
+    """Returns (Timezone_Name, Full_Address) or (None, None)"""
     try:
-        geolocator = Nominatim(user_agent="chrono_shift_project_v1")
-        location = geolocator.geocode(query, timeout=10)
-        
+        geolocator = Nominatim(user_agent="chrono_shift_project_v2")
+        location = geolocator.geocode(query, timeout=5)
         if location:
             tf = TimezoneFinder()
-            detected_timezone = tf.timezone_at(lng=location.longitude, lat=location.latitude)
-            return detected_timezone, location.address
+            return tf.timezone_at(lng=location.longitude, lat=location.latitude), location.address
         return None, None
-    except Exception as e:
+    except:
         return None, None
 
-# --- UI SETUP ---
-st.set_page_config(page_title="ChronoShift", page_icon="⏳")
+def update_timezone_callback():
+    """
+    This function runs ONLY when the user hits Enter on the location field.
+    It forces the Dropdown to update immediately.
+    """
+    query = st.session_state.loc_input # Read the input
+    if query:
+        detected_tz, full_addr = get_timezone_from_string(query)
+        if detected_tz:
+            # FORCE UPDATE: We write directly to the selectbox's key
+            st.session_state.manual_timezone_selector = detected_tz
+            st.toast(f"📍 Updated to: {full_addr}", icon="✅")
+        else:
+            st.toast("❌ Location not found", icon="⚠️")
+
+# --- UI HEADER ---
 st.title("ChronoShift ⏳")
-st.caption("Instantly convert any local time to UTC.")
 
 # --- 1. DATE INPUT ---
-# We place this first. As soon as you paste, the app reruns.
-col_input, col_result = st.columns([1, 1])
-
-with col_input:
-    date_input_str = st.text_input(
-        "1. Paste Date & Time:", 
-        placeholder="e.g. 2026-02-03 14:30 or Oct 7 5pm",
-        help="Accepts almost any format."
-    )
-
-# --- 2. TIMEZONE SELECTION (Auto-syncs) ---
-st.subheader("2. Source Location / Timezone")
-
-# Initialize default to something distinct (Not UTC)
-if 'selected_timezone' not in st.session_state:
-    st.session_state['selected_timezone'] = 'America/New_York'
-
-# Optional Location Search
-with st.expander("📍 Search by City or Address (Auto-updates Timezone)", expanded=True):
-    col_search_1, col_search_2 = st.columns([3, 1])
-    
-    with col_search_1:
-        location_input = st.text_input(
-            "Location search:", 
-            placeholder="Type city (e.g. London) and press Enter",
-            label_visibility="collapsed"
-        )
-    
-    with col_search_2:
-        search_btn = st.button("Find Zone", use_container_width=True)
-
-    # Logic: If user searches, we update the session_state immediately
-    if (search_btn or location_input) and location_input:
-        with st.spinner(f"Locating '{location_input}'..."):
-            detected_tz, full_address = get_location_data(location_input)
-            if detected_tz:
-                st.session_state['selected_timezone'] = detected_tz
-                st.success(f"✅ Set to: **{detected_tz}** ({full_address})")
-            else:
-                st.error("❌ Location not found.")
-
-# Manual Selector (Always visible, stays in sync)
-all_timezones = pytz.all_timezones
-try:
-    current_index = all_timezones.index(st.session_state['selected_timezone'])
-except ValueError:
-    current_index = 0
-
-selected_tz_name = st.selectbox(
-    "Current Timezone Region:",
-    all_timezones,
-    index=current_index,
-    key='manual_timezone_selector',
-    on_change=lambda: st.session_state.update({'selected_timezone': st.session_state.manual_timezone_selector})
+date_input_str = st.text_input(
+    "Date & Time", 
+    placeholder="Paste here (e.g., Oct 7 5pm, 2026-02-03 14:30)",
+    help="Accepts almost any format."
 )
 
-# --- 3. INSTANT CALCULATION ---
-# We calculate and display the result immediately (no button needed)
+# --- 2. LOCATION & TIMEZONE (Synced) ---
+col_loc, col_tz = st.columns([1, 1])
 
+# Initialize default if needed
+if 'manual_timezone_selector' not in st.session_state:
+    st.session_state.manual_timezone_selector = 'America/New_York'
+
+with col_loc:
+    # INPUT: Location
+    # 'on_change' ensures the search happens immediately upon Enter
+    st.text_input(
+        "City / Location (Optional)", 
+        placeholder="e.g. Tucuman, Sao Paulo...",
+        key="loc_input",
+        on_change=update_timezone_callback 
+    )
+
+with col_tz:
+    # INPUT: Selector
+    # Note: We don't need 'index=' logic anymore because we are controlling the key directly
+    all_timezones = pytz.all_timezones
+    
+    st.selectbox(
+        "Timezone Region",
+        all_timezones,
+        key='manual_timezone_selector' # This key is updated by the callback above
+    )
+
+# --- 3. INSTANT RESULT ---
 if date_input_str:
     try:
-        # 1. Parse the string loosely (handles most formats)
+        # Parse & Convert
         dt_naive = parser.parse(date_input_str)
         
-        # 2. Attach the source timezone
-        source_tz = pytz.timezone(selected_tz_name)
-        dt_aware = source_tz.localize(dt_naive)
+        # Get the CURRENT value of the selector (which might have just been auto-updated)
+        current_tz_name = st.session_state.manual_timezone_selector
+        source_tz = pytz.timezone(current_tz_name)
         
-        # 3. Convert to UTC
+        dt_aware = source_tz.localize(dt_naive)
         dt_utc = dt_aware.astimezone(pytz.UTC)
         
-        # 4. Display Result
-        # We use st.code because it provides a one-click copy button
+        # Display
         st.write("---")
-        st.subheader("✅ Converted to UTC:")
+        st.subheader("UTC Conversion:")
         st.code(dt_utc.strftime('%Y-%m-%d %H:%M:%S'), language="text")
+        st.caption(f"Converted from: {current_tz_name}")
         
-        # Optional: Show debug info nicely
-        st.caption(f"Converted from: {dt_aware.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-
-    except Exception as e:
-        st.warning("⚠️ Waiting for a valid date format...")
-else:
-    # Placeholder state
-    st.info("👈 Paste a date above to see the UTC result instantly.")
+    except Exception:
+        st.caption("Waiting for a valid date format...")
