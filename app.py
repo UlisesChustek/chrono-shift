@@ -59,7 +59,7 @@ with col_loc:
     # 'on_change' ensures the search happens immediately upon Enter
     st.text_input(
         "City / Location (Optional)", 
-        placeholder="e.g. Tucuman, Sao Paulo...",
+        placeholder="e.g. Wolf Street 123 / London / Empire state",
         key="loc_input",
         on_change=update_timezone_callback 
     )
