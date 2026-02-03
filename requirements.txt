@@ -1,3 +1,5 @@
 streamlit
 pytz
 python-dateutil
+geopy
+timezonefinder
