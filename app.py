@@ -26,22 +26,38 @@ def get_location_data(query):
 
 # --- UI SETUP ---
 st.title("ChronoShift ⏳")
-st.subheader("Timezone Configuration")
 
-# --- AUTO-DETECTION SECTION ---
-with st.expander("🌍 Don't know your timezone? Search by location", expanded=True):
+# 1. INPUT DATE FIELD (Copy/Paste friendly)
+st.subheader("1. Date & Time")
+date_input = st.text_input(
+    "Paste your date/time here:", 
+    placeholder="YYYY-MM-DD HH:MM (e.g., 2026-02-03 14:30)"
+)
+
+st.write("---")
+
+# 2. TIMEZONE CONFIGURATION
+st.subheader("2. Source Timezone")
+
+# Initialize default state if not present
+if 'selected_timezone' not in st.session_state:
+    st.session_state['selected_timezone'] = 'UTC'
+
+# --- OPTIONAL: AUTO-DETECTION (Helper) ---
+# We put this inside an expander so it's optional and doesn't clutter the UI
+with st.expander("🌍 Optional: Find timezone by City/Address", expanded=False):
     col_search_1, col_search_2 = st.columns([3, 1])
     
     with col_search_1:
         location_input = st.text_input(
-            "Enter City, Country or Address:", 
-            placeholder="Ex: New York, Santiago del Estero 118..."
+            "Search location:", 
+            placeholder="Ex: New York, Santiago del Estero..."
         )
     
     with col_search_2:
         st.write("") # Vertical spacer
         st.write("") 
-        search_btn = st.button("Detect Zone")
+        search_btn = st.button("Detect")
 
     # Processing Logic
     if search_btn and location_input:
@@ -49,18 +65,30 @@ with st.expander("🌍 Don't know your timezone? Search by location", expanded=T
             detected_tz, full_address = get_location_data(location_input)
             
             if detected_tz:
-                st.success(f"✅ Location found: **{full_address}**")
-                st.info(f"⏰ Detected Timezone: **{detected_tz}**")
-                
-                # UPDATE SESSION STATE
-                # This overrides the manual selection
+                st.success(f"✅ Found: **{full_address}**")
+                # UPDATE SESSION STATE to reflect in the dropdown below
                 st.session_state['selected_timezone'] = detected_tz
             else:
-                st.error("❌ Location not found. Please try being more specific.")
+                st.error("❌ Location not found.")
 
-# --- MANUAL SELECTOR SECTION ---
+# --- MANUAL SELECTOR (The Main Control) ---
 all_timezones = pytz.all_timezones
 
-# Initialize default state if not present
-if 'selected_timezone' not in st.session_state:
-    st.session_state['selected_timezone'] = 'UTC'
+# Calculate index based on current state (whether from default or auto-detection)
+try:
+    current_index = all_timezones.index(st.session_state['selected_timezone'])
+except ValueError:
+    current_index = 0
+
+# The Selector
+selected_tz = st.selectbox(
+    "Select Region / Timezone:",
+    all_timezones,
+    index=current_index,
+    key='manual_timezone_selector',
+    on_change=lambda: st.session_state.update({'selected_timezone': st.session_state.manual_timezone_selector})
+)
+
+# --- CALCULATION PREVIEW (Just to check it works) ---
+if date_input:
+    st.info(f"🚀 Ready to convert **{date_input}** from **{selected_tz}**...")
