@@ -96,3 +96,31 @@ if date_input_str:
         
     except Exception:
         st.caption("Waiting for a valid date format...")
+
+# --- 4. FOOTER / CONTROLS ---
+st.write("---")
+# Custom CSS for minimalist button
+st.markdown("""
+<style>
+div.stButton > button:first-child {
+    background-color: transparent;
+    color: #888;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 0.2rem 1rem;
+    font-size: 0.8rem;
+    transition: all 0.3s ease;
+}
+div.stButton > button:first-child:hover {
+    color: #333;
+    border-color: #333;
+    background-color: #f0f0f0;
+}
+</style>
+""", unsafe_allow_html=True)
+
+if st.button("↺ Reset App"):
+    # Clear all session state keys
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
