@@ -44,15 +44,15 @@ st.title("ChronoShift ⏳")
 date_input_str = st.text_input(
     "Date & Time", 
     placeholder="Paste here (e.g., Oct 7 5pm, 2026-02-03 14:30)",
-    help="Accepts almost any format."
+    help="Accepts almost any format.",
+    key="date_input"
 )
 
 # --- 2. LOCATION & TIMEZONE (Synced) ---
 col_loc, col_tz = st.columns([1, 1])
 
 # Initialize default if needed
-if 'manual_timezone_selector' not in st.session_state:
-    st.session_state.manual_timezone_selector = 'America/New_York'
+# Default initialization removed to keep fields blank on reset
 
 with col_loc:
     # INPUT: Location
@@ -72,6 +72,8 @@ with col_tz:
     st.selectbox(
         "Timezone Region",
         all_timezones,
+        index=None,
+        placeholder="Select timezone...",
         key='manual_timezone_selector' # This key is updated by the callback above
     )
 
@@ -83,6 +85,11 @@ if date_input_str:
         
         # Get the CURRENT value of the selector (which might have just been auto-updated)
         current_tz_name = st.session_state.manual_timezone_selector
+        
+        if not current_tz_name:
+            st.info("Please select a timezone to proceed.")
+            st.stop()
+
         source_tz = pytz.timezone(current_tz_name)
         
         dt_aware = source_tz.localize(dt_naive)
@@ -92,7 +99,21 @@ if date_input_str:
         st.write("---")
         st.subheader("UTC Conversion:")
         st.code(dt_utc.strftime('%Y-%m-%d %H:%M:%S'), language="text")
-        st.caption(f"Converted from: {current_tz_name}")
+        
+        # Calculate UTC offset
+        z = dt_aware.strftime('%z') # e.g., +0530, -0300
+        sign = z[0]
+        hours = int(z[1:3])
+        minutes = int(z[3:5])
+        
+        if minutes == 0 and hours == 0:
+            offset_str = "UTC"
+        elif minutes == 0:
+            offset_str = f"UTC{sign}{hours}"
+        else:
+            offset_str = f"UTC{sign}{hours}:{minutes:02d}"
+            
+        st.caption(f"Converted from: {current_tz_name} ({offset_str})")
         
     except Exception:
         st.caption("Waiting for a valid date format...")
